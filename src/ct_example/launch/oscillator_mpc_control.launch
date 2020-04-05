@@ -1,0 +1,6 @@
+<launch>
+
+    <node pkg="ct_example" name="simulation_node" type="simulation_node" output="screen"/>
+    <node pkg="ct_example" name="mpc_controller" type="mpc_controller" output="screen"/>
+
+</launch>

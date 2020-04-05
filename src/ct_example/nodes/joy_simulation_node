@@ -1,0 +1,64 @@
+#!/usr/bin/python
+import rospy
+
+from sensor_msgs.msg import Joy
+from geometry_msgs.msg import Wrench
+
+class JoyManualControl():
+
+    def __init__(self, port=14551, cmd_wrench_enable=False):
+        self.cmd_wrench_enable = cmd_wrench_enable
+        self.armed = False
+        self.port = port
+
+        self.mode =  "MANUAL"    # initial mode
+        self.current_mode = "MANUAL" 
+        self.modes = ["ALT_HOLD", "STABILIZE", "MANUAL"]
+
+        self.force_x, self.force_y, self.force_z = 1500, 1500, 1500
+        self.torque_z = 1500     # Neutral PWM at 1500
+        self.read_parameters()
+        self.joy_sub = rospy.Subscriber('/joy', Joy, self.joy_callback, queue_size=50)
+        self.cmd_wrench_publisher = rospy.Publisher('/cmd_wrench', Wrench, queue_size=50)
+
+    def read_parameters(self):
+        self.translation_limit = rospy.get_param('/thrust_limits/translation/limit', 1)
+        self.rotation_limit = rospy.get_param('/thrust_limits/rotation/limit', 1)
+        self.max_trans_effort = rospy.get_param('/thrust_limits/translation/max_effort', 100)
+        self.max_rot_effort = rospy.get_param('/thrust_limits/rotation/max_effort', 100)
+        self.effort_factor_trans = self.translation_limit / self.max_trans_effort
+        self.effort_factor_rot = self.rotation_limit/ self.max_rot_effort
+        rospy.loginfo("Joy control parameters all loaded!")
+
+    def joy_callback(self, msg):
+
+        self.force_x =  -(msg.axes[1] * self.translation_limit ) 
+        self.force_y =   (msg.axes[0] * self.translation_limit )
+        self.force_z =  -(msg.axes[4] * self.translation_limit )
+        self.torque_z =  (msg.axes[3] * self.rotation_limit ) 
+
+    def cmd_wrench_pub(self):
+        w = Wrench()
+
+        w.force.x = self.force_x
+        w.force.y = self.force_y
+        w.force.z = self.force_z
+        w.torque.z = self.torque_z
+
+        self.cmd_wrench_publisher.publish(w)
+
+
+
+if __name__ == "__main__":
+
+    rospy.init_node("joy_simulation_node", anonymous = False)
+    jmc = JoyManualControl()
+   
+
+    rate = rospy.Rate(100)
+    while not rospy.is_shutdown():
+        try:
+            jmc.cmd_wrench_pub()
+            rate.sleep()
+        except rospy.ROSInterruptException:
+            break

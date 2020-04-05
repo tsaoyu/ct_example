@@ -1,0 +1,6 @@
+<launch>
+
+    <node pkg="ct_example" name="simulation_node" type="simulation_node" output="screen"/>
+    <node pkg="ct_example" name="ilqr_controller" type="ilqr_controller" output="screen"/>
+
+</launch>
