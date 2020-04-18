@@ -85,7 +85,7 @@ class ILQRController {
             u_fb << -0.5, -1;
             FeedbackArray<state_dim, control_dim> u0_fb(N, u_fb);
             ControlVectorArray<control_dim> u0_ff(N, ControlVector<control_dim>::Random());
-            StateVectorArray<state_dim> x_ref_init(N + 1, x_ref);
+            StateVectorArray<state_dim> x_ref_init(N + 1, x_init);
             NLOptConSolver<state_dim, control_dim>::Policy_t initController(x_ref_init, u0_ff, u0_fb, nloc_settings.dt);
             // How to create a more complicated controller for iterations?
 
@@ -125,6 +125,23 @@ class ILQRController {
             
         }
 
+        void plot_solution(){
+            const size_t state_dim = SecondOrderSystem::STATE_DIM;
+            const size_t control_dim = SecondOrderSystem::CONTROL_DIM;
+
+            ct::core::StateFeedbackController<state_dim, control_dim> solution = this->nlop_problem->getSolution();
+            
+
+            std::cout << solution.x_ref()[10] << std::endl;
+
+            plotResultsOscillator<state_dim, control_dim>(solution.x_ref(),
+                                                   solution.K(),
+                                                   solution.uff(), 
+                                                   solution.time());
+
+            
+        }
+
 
         void pose_ref_callback(const geometry_msgs::Point::ConstPtr & msg){
             
@@ -135,6 +152,7 @@ class ILQRController {
                 ILQRController::pos_message_converter(msg, this->x_ref);
                 ILQRController::create_controller(this->x_now, this->x_ref);
                 x_ref_current = this->x_ref;
+                ILQRController::plot_solution();
                 start_time = ros::Time::now().toSec();
                 controller_not_created_ = false;
                 return; 
