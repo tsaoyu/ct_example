@@ -14,7 +14,7 @@ intermediateCost
       }
       R
       {
-        scaling 1
+        scaling 0.01
         (0,0) 1
       }
     }
@@ -31,7 +31,7 @@ finalCost
     {
       Q
       {
-        scaling 100.0
+        scaling 1000.0
         (0,0) 1.0
         (1,1) 1.0
       }
