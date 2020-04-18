@@ -143,7 +143,7 @@ class LQRController {
             Q(1,1) = 1.6;
 
             ct::core::ControlMatrix<control_dim> R;
-            R(0,0) = 1;
+            R(0,0) = 0.001;
 
             ct::core::FeedbackMatrix<state_dim, control_dim> K;
             ct::optcon::LQR<state_dim, control_dim> lqrSolver;
