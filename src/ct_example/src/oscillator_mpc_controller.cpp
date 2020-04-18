@@ -20,6 +20,8 @@ class MPCController {
         typedef std::shared_ptr<MPC<NLOptConSolver<SecondOrderSystem::STATE_DIM, SecondOrderSystem::CONTROL_DIM>>> MPCPtr_t;
         typedef ct::core::StateFeedbackController<SecondOrderSystem::STATE_DIM, SecondOrderSystem::CONTROL_DIM> PolicyPtr_t;
         typedef std::shared_ptr<CostFunctionQuadratic<SecondOrderSystem::STATE_DIM, SecondOrderSystem::CONTROL_DIM>> CostFuncPtr_t;
+        typedef std::shared_ptr<ct::optcon::TermQuadratic<SecondOrderSystem::STATE_DIM, SecondOrderSystem::CONTROL_DIM>> TermPtr_t;
+
 
 
         MPCController(ros::NodeHandle *n){
@@ -58,19 +60,21 @@ class MPCController {
                 new ct::optcon::TermQuadratic<state_dim, control_dim>());
             std::shared_ptr<ct::optcon::TermQuadratic<state_dim, control_dim>> finalCost(
                 new ct::optcon::TermQuadratic<state_dim, control_dim>());
+            this->termQuad_interm = intermediateCost;
+            this->termQuad_final = finalCost;
 
-            intermediateCost->loadConfigFile(configDir + "/soc_Cost.info", "intermediateCost");
-            finalCost->loadConfigFile(configDir + "/soc_Cost.info", "finalCost");
-
-            intermediateCost->updateReferenceState(this->x_ref);
-            finalCost->updateReferenceState(this->x_ref);
+            this->termQuad_interm->loadConfigFile(configDir + "/soc_Cost.info", "intermediateCost");
+            this->termQuad_final->loadConfigFile(configDir + "/soc_Cost.info", "finalCost");
+            this->termQuad_interm->updateReferenceState(this->x_ref);
+            this->termQuad_final->updateReferenceState(this->x_ref);
+      
 
             CostFuncPtr_t costFunction(
                 new CostFunctionAnalytical<state_dim, control_dim>());
             this->costFunc = costFunction;
 
-            this->costFunc->addIntermediateTerm(intermediateCost);
-            this->costFunc->addFinalTerm(finalCost);
+            this->costFunc->addIntermediateTerm(this->termQuad_interm);
+            this->costFunc->addFinalTerm(this->termQuad_final);
 
             // Check which cost function should I use here.
 
@@ -127,12 +131,12 @@ class MPCController {
             // ... however, in MPC-mode, it makes sense to limit the overall number of iLQR iterations (real-time iteration scheme)
             ilqr_settings_mpc.max_iterations = 1;
             // and we limited the printouts, too.
-            ilqr_settings_mpc.printSummary = false;
+            ilqr_settings_mpc.printSummary = true;
             // 2) settings specific to model predictive control. For a more detailed description of those, visit ct/optcon/mpc/MpcSettings.h
             ct::optcon::mpc_settings mpc_settings;
-            mpc_settings.stateForwardIntegration_ = false;
-            mpc_settings.postTruncation_ = false;
-            mpc_settings.measureDelay_ = false;
+            mpc_settings.stateForwardIntegration_ = true;
+            mpc_settings.postTruncation_ = true;
+            mpc_settings.measureDelay_ = true;
             mpc_settings.delayMeasurementMultiplier_ = 1.0;
             mpc_settings.mpc_mode = ct::optcon::MPC_MODE::CONSTANT_RECEDING_HORIZON;
             mpc_settings.coldStart_ = false;
@@ -190,8 +194,11 @@ class MPCController {
             }
             else
             {
-                MPCController::create_controller(this->x_now, this->x_ref);
-                this->costFunc->updateReferenceState(this->x_ref);
+                // MPCController::create_controller(this->x_now, this->x_ref);
+                this->termQuad_interm->updateReferenceState(this->x_ref);
+                this->termQuad_final->updateReferenceState(this->x_ref);
+                this->costFunc->addIntermediateTerm(this->termQuad_interm);
+                this->costFunc->addFinalTerm(this->termQuad_final);
                 x_ref_current = this->x_ref;
                 start_time = ros::Time::now().toSec();
             }
@@ -210,16 +217,21 @@ class MPCController {
         
             current_time = ros::Time::now().toSec();
             ct::core::Time t = current_time - start_time;
-            this->mpc->prepareIteration(t);
+            this->mpc->prepareIteration(current_time);
             current_time = ros::Time::now().toSec();
             t = current_time - start_time;
             this->mpc->finishIteration(this->x_now, t, newPolicy, ts_newPolicy);
             current_time = ros::Time::now().toSec();
             t = current_time - start_time;
             ControlVector<control_dim> u;
-            newPolicy.computeControl(this->x_now, t, u);
-            std::cout << "Time now: " << t << " Reference point: " << this->x_ref(0) << " " << this->x_ref(1) 
+            newPolicy.computeControl(this->x_now, t - ts_newPolicy, u);
+            std::cout << "Time now: " << t << " " << ts_newPolicy << " Reference point: " << this->x_ref(0) << " " << this->x_ref(1) 
             << " Current point: "  << this->x_now(0) << " " << this->x_now(1) << " \n";
+
+            // plotResultsOscillator<state_dim, control_dim>(newPolicy.x_ref(),
+            //                                                 newPolicy.K(),
+            //                                                 newPolicy.uff(),
+            //                                                 newPolicy.time());
 
             geometry_msgs::Wrench wrench;
             wrench.force.x = u(0);
@@ -246,6 +258,7 @@ class MPCController {
             MPCPtr_t mpc; 
             PolicyPtr_t newPolicy;
             CostFuncPtr_t costFunc;
+            TermPtr_t termQuad_interm, termQuad_final;
             size_t N;
 
             double start_time;
