@@ -199,6 +199,9 @@ class MPCController {
                 this->termQuad_final->updateReferenceState(this->x_ref);
                 this->costFunc->addIntermediateTerm(this->termQuad_interm);
                 this->costFunc->addFinalTerm(this->termQuad_final);
+                auto solver = this->mpc->getSolver();
+                solver.changeCostFunction(this->costFunc);
+                
                 x_ref_current = this->x_ref;
                 start_time = ros::Time::now().toSec();
             }
@@ -206,6 +209,9 @@ class MPCController {
 
         }
 
+        void print_mpc_summary(){
+            this->mpc->printMpcSummary();
+        }
        
         void publish_cmd_wrench(){
 
@@ -225,7 +231,7 @@ class MPCController {
             t = current_time - start_time;
             ControlVector<control_dim> u;
             newPolicy.computeControl(this->x_now, t - ts_newPolicy, u);
-            std::cout << "Time now: " << t << " " << ts_newPolicy << " Reference point: " << this->x_ref(0) << " " << this->x_ref(1) 
+            std::cout << this->mpc->timeHorizonReached() << " Reference point: " << this->x_ref(0) << " " << this->x_ref(1) 
             << " Current point: "  << this->x_now(0) << " " << this->x_now(1) << " \n";
 
             // plotResultsOscillator<state_dim, control_dim>(newPolicy.x_ref(),
@@ -290,5 +296,7 @@ int main(int argc, char** argv){
         r.sleep();
         
     }
+
+    mpc_controller.print_mpc_summary();
 }
 
